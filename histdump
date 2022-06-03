@@ -1,0 +1,35 @@
+#!/bin/bash
+
+DEFAULT="$HOME/Library/Safari/History.db"
+NSDATE_EPOCH=978307200 #Found in https://stackoverflow.com/a/34546556/15272584
+DATE_FORMAT='+%Y-%m-%d %H:%M'
+OUTPUT_FORMAT='$TIME: $TITLE [$URL]'
+SQL_COMMAND=$(cat <<EOF
+SELECT visit_time,url,title FROM
+(
+	SELECT * FROM history_visits
+	INNER JOIN history_items ON history_items.id=history_visits.history_item
+);
+EOF
+)
+
+echo "$SQL_COMMAND" | sqlite3 -batch -readonly "${1:-$DEFAULT}" |
+while read LINE; do
+	NSDATE_TIME=$(
+		echo "$LINE" |
+		cut -d '|' -f 1 |
+		cut -d . -f 1 #Remove decimal seconds
+	)
+	TIME=$(
+		date -r "$NSDATE_TIME" -v "+${NSDATE_EPOCH}S" "$DATE_FORMAT"
+	)
+	URL=$(
+		echo "$LINE" |
+		cut -d '|' -f 2
+	)
+	TITLE=$(
+		echo "$LINE" |
+		cut -d '|' -f 3- #Fields 3+ because the title  may include '|'
+	)
+	eval echo $OUTPUT_FORMAT
+done
